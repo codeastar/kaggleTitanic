@@ -126,8 +126,16 @@ df['Embarked'] = df['Embarked'].fillna('S')
 #map into value
 df['Embarked'] = df['Embarked'].map( {'S': 0, 'C': 1, 'Q': 2} ).astype(int)
 
+#map sex into int
+df['Sex'] = df['Sex'].map( {'male': 1, 'female':0} ).astype(int)
+
+#converse categories into int
+df['FamilyGroup'] = df['FamilyGroup'].astype(int)
+df['AgeGroup'] = df['AgeGroup'].astype(int)
+df['FareGroup'] = df['FareGroup'].astype(int)
+
 #prepare training dataframe
-X_learning = df.drop(['Name', 'Cabin', 'SibSp', 'Parch', 'Fare', 'Survived', 'Ticket', 'Fare_log', 'isAlone', 'FamilySize', 'PassengerId'], axis=1)
+X_learning = df.drop(['Name', 'Cabin', 'SibSp', 'Parch', 'Fare', 'Survived', 'Ticket', 'Fare_log', 'FamilySize', 'PassengerId'], axis=1)
 Y_learning = df['Survived']
 
 #get the train and test set
@@ -153,3 +161,11 @@ from sklearn.ensemble import RandomForestClassifier
 rfc = RandomForestClassifier()
 rfc.fit(X_train,y_train)
 predictions = rfc.predict(X_test)
+
+#using Xgboost
+import xgboost as xgb
+
+gbm = xgb.XGBClassifier(max_depth=3, n_estimators=300, learning_rate=0.05)
+#gbm = xgb.XGBClassifier()
+gbm.fit(X_train,y_train)
+predictions = gbm.predict(X_test)
