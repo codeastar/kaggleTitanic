@@ -126,13 +126,23 @@ df['Embarked'] = df['Embarked'].fillna('S')
 #map into value
 df['Embarked'] = df['Embarked'].map( {'S': 0, 'C': 1, 'Q': 2} ).astype(int)
 
-#map sex into int
-df['Sex'] = df['Sex'].map( {'male': 1, 'female':0} ).astype(int)
-
 #converse categories into int
 df['FamilyGroup'] = df['FamilyGroup'].astype(int)
 df['AgeGroup'] = df['AgeGroup'].astype(int)
 df['FareGroup'] = df['FareGroup'].astype(int)
+
+#get title from name 
+df['Title'] = df['Name'].apply(lambda x: x.split(",")[1].split(".")[0].strip())
+#group rare titles into rare
+df["Title"] = df["Title"].replace(['Lady', 'the Countess','Countess','Capt', 'Col','Don', 'Dr', 'Major', 'Rev', 'Sir', 'Jonkheer', 'Dona'], 'Rare')
+
+df['Title'] = df['Title'].replace('Mlle', 'Miss')
+df['Title'] = df['Title'].replace('Ms', 'Miss')
+df['Title'] = df['Title'].replace('Mme', 'Mrs')
+
+#converse into digit 
+title_mapping = {"Mr": 1, "Miss": 2, "Mrs": 3, "Master": 4, "Rare": 5}
+df['Title'] = df['Title'].map(title_mapping)
 
 #prepare training dataframe
 X_learning = df.drop(['Name', 'Cabin', 'SibSp', 'Parch', 'Fare', 'Survived', 'Ticket', 'Fare_log', 'FamilySize', 'PassengerId'], axis=1)
