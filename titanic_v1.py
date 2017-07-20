@@ -179,3 +179,159 @@ gbm = xgb.XGBClassifier(max_depth=3, n_estimators=300, learning_rate=0.05)
 #gbm = xgb.XGBClassifier()
 gbm.fit(X_train,y_train)
 predictions = gbm.predict(X_test)
+
+#use Kfold validation
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.ensemble import AdaBoostClassifier
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+from sklearn.tree import DecisionTreeClassifier
+import xgboost as xgb
+
+random_state = 19
+
+models = []
+models.append(("RFC", RandomForestClassifier(random_state=random_state)) )
+models.append(("ETC", ExtraTreesClassifier(random_state=random_state)) )
+models.append(("ADA", AdaBoostClassifier(random_state=random_state)) )
+models.append(("GBC", GradientBoostingClassifier(random_state=random_state)) )
+models.append(("SVC", SVC(random_state=random_state)) )
+models.append(("LoR", LogisticRegression(random_state=random_state)) )
+models.append(("LDA", LinearDiscriminantAnalysis()) )
+models.append(("QDA", QuadraticDiscriminantAnalysis()) )
+models.append(("DTC", DecisionTreeClassifier(random_state=random_state)) )
+models.append(("XGB", xgb.XGBClassifier()) )
+
+from sklearn import model_selection
+
+kfold = model_selection.KFold(n_splits=10)
+
+k_names=[]
+k_means=[]
+k_stds=[]
+
+for name, model in models:
+     #cross validation among models, score based on accuracy
+     cv_results = model_selection.cross_val_score(model, X_learning, Y_learning, scoring='accuracy', cv=kfold )
+     print("\n"+name)    
+     #print("Results: "+str(cv_results))
+     print("Mean: " + str(cv_results.mean()))
+     print("Standard Deviation: " + str(cv_results.std()))
+     k_names.append(name)
+     k_means.append(cv_results.mean())
+     k_stds.append(cv_results.std())
+        
+kfc_df = pd.DataFrame({"CrossValMeans":k_means,"CrossValerrors": k_stds,"Algorithm":k_names})  
+
+sns.barplot("CrossValMeans","Algorithm",data = kfc_df, orient = "h",**{'xerr':k_stds})
+
+plt.show()
+
+# start submission
+
+import pandas as pd
+import numpy as np
+
+train_df = pd.read_csv("Development/Playground/Titanic/train.csv")
+test_df = pd.read_csv("Development/Playground/Titanic/test.csv")
+
+def setFamilyGroup(df): 
+    #handle family group
+    df['FamilySize'] = df['SibSp'] + df['Parch'] + 1
+
+    bins = (-1, 1, 2, 3, 12)
+    group_names = [1,2,3,4]
+    categories = pd.cut(df['FamilySize'], bins, labels=group_names)
+    df['FamilyGroup'] = categories
+    
+def setAgeGroup(df): 
+    #fill up NaN age according class / sibsp / parch
+    index_NaN_age = list(df["Age"][df["Age"].isnull()].index)
+   
+    for i in index_NaN_age :
+      age_mean = df["Age"].mean()
+      age_std = df["Age"].std()
+      age_pred_w_spc = df["Age"][((df['SibSp'] == df.iloc[i]["SibSp"]) & (df['Parch'] == df.iloc[i]["Parch"]) & (df['Pclass'] == df.iloc[i]["Pclass"]))].mean()
+      age_pred_wo_spc = np.random.randint(age_mean - age_std, age_mean + age_std)
+    
+      if not np.isnan(age_pred_w_spc) :
+        df['Age'].iloc[i] = age_pred_w_spc
+      else :
+        df['Age'].iloc[i] = age_pred_wo_spc  
+        
+    #separate age into 4 groups 
+    bins = (-1, 16, 30, 50, 100)
+    group_names = [1,2,3,4]
+    categories = pd.cut(df['Age'], bins, labels=group_names)
+    df['AgeGroup'] = categories    
+    
+def setFareGroup(df):
+  #fill the missing fare with median
+  df["Fare"] = df["Fare"].fillna(df["Fare"].median())
+
+  df['Fare_log'] = df["Fare"].map(lambda i: np.log(i) if i > 0 else 0)
+    
+  bins = (-1, 2, 2.67, 3.43, 10)
+  group_names = [1,2,3,4]
+  categories = pd.cut(df['Fare_log'], bins, labels=group_names)
+  df['FareGroup'] = categories
+    
+def setTitle(df):
+   df['Title'] = df['Name'].apply(lambda x: x.split(",")[1].split(".")[0].strip())
+   df["Title"] = df["Title"].replace(['Lady', 'the Countess','Countess','Capt', 'Col','Don', 'Dr', 'Major', 'Rev', 'Sir', 'Jonkheer', 'Dona'], 'Rare')
+   df['Title'] = df['Title'].replace('Mlle', 'Miss')
+   df['Title'] = df['Title'].replace('Ms', 'Miss')
+   df['Title'] = df['Title'].replace('Mme', 'Mrs')
+   title_mapping = {"Mr": 1, "Miss": 2, "Mrs": 3, "Master": 4, "Rare": 5}
+   df['Title'] = df['Title'].map(title_mapping)    
+
+
+def getmanipulatedDF(train_df, test_df):
+  dfs = [train_df, test_df]
+   
+  for df in dfs:
+    df["Sex"] = df["Sex"].map({"male": 1, "female":0})
+    
+    setFamilyGroup(df) 
+    
+    setAgeGroup(df)
+    
+    setFareGroup(df)
+    
+    #fill up the missing 2 Embarked
+    df['Embarked'] = df['Embarked'].fillna('S')
+    #map into value
+    df['Embarked'] = df['Embarked'].map( {'S': 0, 'C': 1, 'Q': 2} ).astype(int)
+    
+    #converse categories into int
+    df['FamilyGroup'] = df['FamilyGroup'].astype(int)
+    df['AgeGroup'] = df['AgeGroup'].astype(int)
+    df['FareGroup'] = df['FareGroup'].astype(int)
+    
+    setTitle(df)    
+    
+  return dfs[0], dfs[1]
+
+
+train_df, test_df = getmanipulatedDF(train_df, test_df)
+
+X_learning = train_df.drop(['Name', 'Cabin', 'SibSp', 'Parch', 'Fare', 'Survived', 'Ticket', 'Fare_log', 'FamilySize', 'PassengerId'], axis=1)
+Y_learning = train_df['Survived']
+
+X_test = test_df.drop(['Name', 'Cabin', 'SibSp', 'Parch', 'Fare', 'Ticket', 'Fare_log', 'FamilySize', 'PassengerId'], axis=1)
+
+xgbc = xgb.XGBClassifier()
+xgbc.fit(X_learning,Y_learning)
+predictions = xgbc.predict(X_test)
+
+#0.76077 = xgb
+#0.74641 = gbc
+#0.76077 = ada
+
+output = pd.DataFrame({ 'PassengerId' : test_df['PassengerId'], 'Survived': predictions })
+
+output.to_csv("Development/Playground/Titanic/out_xgb.csv", index = False)
