@@ -231,6 +231,15 @@ sns.barplot("CrossValMeans","Algorithm",data = kfc_df, orient = "h",**{'xerr':k_
 
 plt.show()
 
+#age and survived relationship
+facet = sns.FacetGrid(train_df, hue="Survived",aspect=4)
+facet.map(sns.kdeplot,'Age',shade= True)
+facet.set(xlim=(0, train_df['Age'].max()))
+facet.add_legend()
+
+plt.show()
+
+
 # start submission
 
 import pandas as pd
@@ -335,3 +344,69 @@ predictions = xgbc.predict(X_test)
 output = pd.DataFrame({ 'PassengerId' : test_df['PassengerId'], 'Survived': predictions })
 
 output.to_csv("Development/Playground/Titanic/out_xgb.csv", index = False)
+
+#New edit
+
+
+def setFamilyGroup(df): 
+    #set people into parentchild and spousesib groups
+    df['withP']=0
+    df['withS']=0
+    
+    df.loc[train_df['SibSp'] > 0, 'withS'] = 1
+    df.loc[train_df['Parch'] > 0, 'withP'] = 1
+    
+    #handle family group
+    df['FamilySize'] = df['SibSp'] + df['Parch'] + 1
+
+    bins = (-1, 1, 2, 3, 12)
+    group_names = [1,2,3,4]
+    categories = pd.cut(df['FamilySize'], bins, labels=group_names)
+    df['FamilyGroup'] = categories
+    
+def setAgeGroup(df): 
+    #fill up NaN age according class / sibsp / parch
+    index_NaN_age = list(df["Age"][df["Age"].isnull()].index)
+   
+    for i in index_NaN_age :
+      age_mean = df["Age"].mean()
+      age_std = df["Age"].std()
+      age_pred_w_spc = df["Age"][((df['SibSp'] == df.iloc[i]["SibSp"]) & (df['Parch'] == df.iloc[i]["Parch"]) & (df['Pclass'] == df.iloc[i]["Pclass"]))].mean()
+      age_pred_wo_spc = np.random.randint(age_mean - age_std, age_mean + age_std)
+    
+      if not np.isnan(age_pred_w_spc) :
+        df['Age'].iloc[i] = age_pred_w_spc
+      else :
+        df['Age'].iloc[i] = age_pred_wo_spc  
+        
+    #separate age into 6 groups 
+    bins = (-1, 15, 23, 33, 43, 53, 100)
+    group_names = [1,2,3,4,5,6]
+    categories = pd.cut(df['Age'], bins, labels=group_names)
+    df['AgeGroup'] = categories
+    
+facet = sns.FacetGrid(train_df, hue="Survived",aspect=4)
+facet.map(sns.kdeplot,'Fare_log',shade= True)
+facet.set(xlim=(0, train_df['Fare_log'].max()))
+facet.add_legend()
+
+plt.show()    
+
+def setFareGroup(df):
+  #fill the missing fare with median
+  df["Fare"] = df["Fare"].fillna(df["Fare"].median())
+
+  df['Fare_log'] = df["Fare"].map(lambda i: np.log(i) if i > 0 else 0)
+    
+  bins = (-1, 2, 2.68, 3.44, 10)
+  group_names = [1,2,3,4]
+  categories = pd.cut(df['Fare_log'], bins, labels=group_names)
+  df['FareGroup'] = categories
+
+X_learning = train_df.drop(['Name', 'Cabin', 'SibSp', 'Parch', 'Fare', 'Survived', 'Ticket', 'PassengerId'], axis=1)
+Y_learning = train_df['Survived']
+ 
+X_test = test_df.drop(['Name', 'Cabin', 'SibSp', 'Parch', 'Fare', 'Ticket', 'PassengerId'], axis=1)    
+
+#0.78469 = XGB with new cal
+#0.75120 = ADA with new cal
