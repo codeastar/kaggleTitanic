@@ -1,7 +1,10 @@
 import pandas as pd
 import numpy as np
 
+#replace file path
 df = pd.read_csv("Development/Playground/Titanic/train.csv")
+
+#data structure checking
 
 #get the test sample size
 print(df.shape)
@@ -39,64 +42,6 @@ sns.barplot(x="FamilySize", y="Survived", data=df)
 
 plt.show()
 
-#put FamilySize into Family group
-bins = (-1, 1, 2, 3, 12)
-group_names = [1,2,3,4]
-categories = pd.cut(df['FamilySize'], bins, labels=group_names)
-df['FamilyGroup'] = categories
-
-#count for familyGroup and size
-print(df['FamilyGroup'].value_counts(ascending=True))
-print(df['FamilySize'].value_counts(ascending=True))
-
-#add isAlone column 
-bins = (-1, 1, 12)
-group_names = [1,0]
-categories = pd.cut(df['FamilySize'], bins, labels=group_names)
-df['isAlone'] = categories
-
-#isAlone in graph
-sns.barplot(x="isAlone", y="Survived", data=df);
-
-# convert Sex into categorical value 1 for male and 0 for female
-df["Sex"] = df["Sex"].map({"male": 1, "female":0})
-
-#check age correlation with others
-age_heat = sns.heatmap(df[["Age","Sex","SibSp","Parch","Pclass"]].corr(),annot=True)
-
-plt.show()
-
-#fill up NaN age according class / sibsp / parch
-index_NaN_age = list(df["Age"][df["Age"].isnull()].index)
-
-for i in index_NaN_age :
-    age_mean = df["Age"].mean()
-    age_std = df["Age"].std()
-    age_pred_w_spc = df["Age"][((df['SibSp'] == df.iloc[i]["SibSp"]) & (df['Parch'] == df.iloc[i]["Parch"]) & (df['Pclass'] == df.iloc[i]["Pclass"]))].mean()
-    age_pred_wo_spc = np.random.randint(age_mean - age_std, age_mean + age_std)
-    
-    if not np.isnan(age_pred_w_spc) :
-        df['Age'].iloc[i] = age_pred_w_spc
-    else :
-        df['Age'].iloc[i] = age_pred_wo_spc    
-
-#check age distribution
-age_dist = sns.distplot(df['Age'], label="Skewness : %.2f"%(df["Age"].skew()))
-age_dist.legend(loc="best")
-
-plt.show()
-
-#separate age into 4 groups 
-bins = (-1, 16, 30, 50, 100)
-group_names = [1,2,3,4]
-categories = pd.cut(df['Age'], bins, labels=group_names)
-df['AgeGroup'] = categories
-
-print(df['AgeGroup'].value_counts(ascending=True))
-
-#age groups in a graph
-sns.barplot(x="AgeGroup", y="Survived", data=df);
-
 #check fare distribution
 fare_dist = sns.distplot(df['Fare'], label="Skewness : %.2f"%(df["Fare"].skew()))
 fare_dist .legend(loc="best")
@@ -121,64 +66,114 @@ df['FareGroup'] = categories
 
 print(df['FareGroup'].value_counts(ascending=True))
 
-#fill up the missing 2 Embarked
-df['Embarked'] = df['Embarked'].fillna('S')
-#map into value
-df['Embarked'] = df['Embarked'].map( {'S': 0, 'C': 1, 'Q': 2} ).astype(int)
 
-#converse categories into int
-df['FamilyGroup'] = df['FamilyGroup'].astype(int)
-df['AgeGroup'] = df['AgeGroup'].astype(int)
-df['FareGroup'] = df['FareGroup'].astype(int)
+# start prediction
 
-#get title from name 
-df['Title'] = df['Name'].apply(lambda x: x.split(",")[1].split(".")[0].strip())
-#group rare titles into rare
-df["Title"] = df["Title"].replace(['Lady', 'the Countess','Countess','Capt', 'Col','Don', 'Dr', 'Major', 'Rev', 'Sir', 'Jonkheer', 'Dona'], 'Rare')
+import pandas as pd
+import numpy as np
 
-df['Title'] = df['Title'].replace('Mlle', 'Miss')
-df['Title'] = df['Title'].replace('Ms', 'Miss')
-df['Title'] = df['Title'].replace('Mme', 'Mrs')
+train_df = pd.read_csv("Development/Playground/Titanic/train.csv")
+test_df = pd.read_csv("Development/Playground/Titanic/test.csv")
 
-#converse into digit 
-title_mapping = {"Mr": 1, "Miss": 2, "Mrs": 3, "Master": 4, "Rare": 5}
-df['Title'] = df['Title'].map(title_mapping)
+def setFamilyGroup(df): 
+    #set people into parentchild and spousesib groups
+    df['withP']=0
+    df['withS']=0
+    
+    df.loc[train_df['SibSp'] > 0, 'withS'] = 1
+    df.loc[train_df['Parch'] > 0, 'withP'] = 1
+    
+    #handle family group
+    df['FamilySize'] = df['SibSp'] + df['Parch'] + 1
 
-#prepare training dataframe
-X_learning = df.drop(['Name', 'Cabin', 'SibSp', 'Parch', 'Fare', 'Survived', 'Ticket', 'Fare_log', 'FamilySize', 'PassengerId'], axis=1)
-Y_learning = df['Survived']
+    bins = (-1, 1, 2, 3, 12)
+    group_names = [1,2,3,4]
+    categories = pd.cut(df['FamilySize'], bins, labels=group_names)
+    df['FamilyGroup'] = categories
+    
+def setAgeGroup(df): 
+    #fill up NaN age according class / sibsp / parch
+    index_NaN_age = list(df["Age"][df["Age"].isnull()].index)
+   
+    for i in index_NaN_age :
+      age_mean = df["Age"].mean()
+      age_std = df["Age"].std()
+      age_pred_w_spc = df["Age"][((df['SibSp'] == df.iloc[i]["SibSp"]) & (df['Parch'] == df.iloc[i]["Parch"]) & (df['Pclass'] == df.iloc[i]["Pclass"]))].mean()
+      age_pred_wo_spc = np.random.randint(age_mean - age_std, age_mean + age_std)
+    
+      if not np.isnan(age_pred_w_spc) :
+        df['Age'].iloc[i] = age_pred_w_spc
+      else :
+        df['Age'].iloc[i] = age_pred_wo_spc  
+        
+    #separate age into 6 groups 
+    bins = (-1, 15, 23, 33, 43, 53, 100)
+    group_names = [1,2,3,4,5,6]
+    categories = pd.cut(df['Age'], bins, labels=group_names)
+    df['AgeGroup'] = categories
+    
+def setFareGroup(df):
+  #fill the missing fare with median
+  df["Fare"] = df["Fare"].fillna(df["Fare"].median())
 
-#get the train and test set
-from sklearn.model_selection import train_test_split
+  df['Fare_log'] = df["Fare"].map(lambda i: np.log(i) if i > 0 else 0)
+    
+  bins = (-1, 2, 2.68, 3.44, 10)
+  group_names = [1,2,3,4]
+  categories = pd.cut(df['Fare_log'], bins, labels=group_names)
+  df['FareGroup'] = categories
+    
+def setTitle(df):
+   df['Title'] = df['Name'].apply(lambda x: x.split(",")[1].split(".")[0].strip())
+   df["Title"] = df["Title"].replace(['Lady', 'the Countess','Countess','Capt', 'Col','Don', 'Dr', 'Major', 'Rev', 'Sir', 'Jonkheer', 'Dona'], 'Rare')
+   df['Title'] = df['Title'].replace('Mlle', 'Miss')
+   df['Title'] = df['Title'].replace('Ms', 'Miss')
+   df['Title'] = df['Title'].replace('Mme', 'Mrs')
+   title_mapping = {"Mr": 1, "Miss": 2, "Mrs": 3, "Master": 4, "Rare": 5}
+   df['Title'] = df['Title'].map(title_mapping)    
 
-num_test = 0.20
-X_train, X_test, y_train, y_test = train_test_split(X_learning, Y_learning, test_size=num_test, random_state=31)
 
-#test using SVC
-from sklearn.svm import SVC
+def getmanipulatedDF(train_df, test_df):
+  dfs = [train_df, test_df]
+   
+  for df in dfs:
+    df["Sex"] = df["Sex"].map({"male": 1, "female":0})
+    
+    setFamilyGroup(df) 
+    
+    setAgeGroup(df)
+    
+    setFareGroup(df)
+    
+    #fill up the missing 2 Embarked
+    df['Embarked'] = df['Embarked'].fillna('S')
+    #map into value
+    df['Embarked'] = df['Embarked'].map( {'S': 0, 'C': 1, 'Q': 2} ).astype(int)
+    
+    #converse categories into int
+    df['FamilyGroup'] = df['FamilyGroup'].astype(int)
+    df['AgeGroup'] = df['AgeGroup'].astype(int)
+    df['FareGroup'] = df['FareGroup'].astype(int)
+    
+    setTitle(df)    
+    
+  return dfs[0], dfs[1]
 
-svc = SVC()
-svc.fit(X_train,y_train)
-predictions = svc.predict(X_test)
 
-from sklearn.metrics import accuracy_score
+train_df, test_df = getmanipulatedDF(train_df, test_df)
 
-print("Accuracy rate:  %f" % (accuracy_score(y_test, predictions)))
+#fare_log, survived check    
+facet = sns.FacetGrid(train_df, hue="Survived",aspect=4)
+facet.map(sns.kdeplot,'Fare_log',shade= True)
+facet.set(xlim=(0, train_df['Fare_log'].max()))
+facet.add_legend()
 
-#test using RainForest
-from sklearn.ensemble import RandomForestClassifier
+plt.show()    
 
-rfc = RandomForestClassifier()
-rfc.fit(X_train,y_train)
-predictions = rfc.predict(X_test)
-
-#using Xgboost
-import xgboost as xgb
-
-gbm = xgb.XGBClassifier(max_depth=3, n_estimators=300, learning_rate=0.05)
-#gbm = xgb.XGBClassifier()
-gbm.fit(X_train,y_train)
-predictions = gbm.predict(X_test)
+X_learning = train_df.drop(['Name', 'Cabin', 'SibSp', 'Parch', 'Fare', 'Survived', 'Ticket', 'PassengerId'], axis=1)
+Y_learning = train_df['Survived']
+ 
+X_test = test_df.drop(['Name', 'Cabin', 'SibSp', 'Parch', 'Fare', 'Ticket', 'PassengerId'], axis=1)    
 
 #use Kfold validation
 from sklearn.ensemble import RandomForestClassifier
@@ -224,189 +219,20 @@ for name, model in models:
      k_names.append(name)
      k_means.append(cv_results.mean())
      k_stds.append(cv_results.std())
-        
+
+#display the result       
 kfc_df = pd.DataFrame({"CrossValMeans":k_means,"CrossValerrors": k_stds,"Algorithm":k_names})  
 
 sns.barplot("CrossValMeans","Algorithm",data = kfc_df, orient = "h",**{'xerr':k_stds})
 
-plt.show()
-
-#age and survived relationship
-facet = sns.FacetGrid(train_df, hue="Survived",aspect=4)
-facet.map(sns.kdeplot,'Age',shade= True)
-facet.set(xlim=(0, train_df['Age'].max()))
-facet.add_legend()
-
-plt.show()
-
-
-# start submission
-
-import pandas as pd
-import numpy as np
-
-train_df = pd.read_csv("Development/Playground/Titanic/train.csv")
-test_df = pd.read_csv("Development/Playground/Titanic/test.csv")
-
-def setFamilyGroup(df): 
-    #handle family group
-    df['FamilySize'] = df['SibSp'] + df['Parch'] + 1
-
-    bins = (-1, 1, 2, 3, 12)
-    group_names = [1,2,3,4]
-    categories = pd.cut(df['FamilySize'], bins, labels=group_names)
-    df['FamilyGroup'] = categories
-    
-def setAgeGroup(df): 
-    #fill up NaN age according class / sibsp / parch
-    index_NaN_age = list(df["Age"][df["Age"].isnull()].index)
-   
-    for i in index_NaN_age :
-      age_mean = df["Age"].mean()
-      age_std = df["Age"].std()
-      age_pred_w_spc = df["Age"][((df['SibSp'] == df.iloc[i]["SibSp"]) & (df['Parch'] == df.iloc[i]["Parch"]) & (df['Pclass'] == df.iloc[i]["Pclass"]))].mean()
-      age_pred_wo_spc = np.random.randint(age_mean - age_std, age_mean + age_std)
-    
-      if not np.isnan(age_pred_w_spc) :
-        df['Age'].iloc[i] = age_pred_w_spc
-      else :
-        df['Age'].iloc[i] = age_pred_wo_spc  
-        
-    #separate age into 4 groups 
-    bins = (-1, 16, 30, 50, 100)
-    group_names = [1,2,3,4]
-    categories = pd.cut(df['Age'], bins, labels=group_names)
-    df['AgeGroup'] = categories    
-    
-def setFareGroup(df):
-  #fill the missing fare with median
-  df["Fare"] = df["Fare"].fillna(df["Fare"].median())
-
-  df['Fare_log'] = df["Fare"].map(lambda i: np.log(i) if i > 0 else 0)
-    
-  bins = (-1, 2, 2.67, 3.43, 10)
-  group_names = [1,2,3,4]
-  categories = pd.cut(df['Fare_log'], bins, labels=group_names)
-  df['FareGroup'] = categories
-    
-def setTitle(df):
-   df['Title'] = df['Name'].apply(lambda x: x.split(",")[1].split(".")[0].strip())
-   df["Title"] = df["Title"].replace(['Lady', 'the Countess','Countess','Capt', 'Col','Don', 'Dr', 'Major', 'Rev', 'Sir', 'Jonkheer', 'Dona'], 'Rare')
-   df['Title'] = df['Title'].replace('Mlle', 'Miss')
-   df['Title'] = df['Title'].replace('Ms', 'Miss')
-   df['Title'] = df['Title'].replace('Mme', 'Mrs')
-   title_mapping = {"Mr": 1, "Miss": 2, "Mrs": 3, "Master": 4, "Rare": 5}
-   df['Title'] = df['Title'].map(title_mapping)    
-
-
-def getmanipulatedDF(train_df, test_df):
-  dfs = [train_df, test_df]
-   
-  for df in dfs:
-    df["Sex"] = df["Sex"].map({"male": 1, "female":0})
-    
-    setFamilyGroup(df) 
-    
-    setAgeGroup(df)
-    
-    setFareGroup(df)
-    
-    #fill up the missing 2 Embarked
-    df['Embarked'] = df['Embarked'].fillna('S')
-    #map into value
-    df['Embarked'] = df['Embarked'].map( {'S': 0, 'C': 1, 'Q': 2} ).astype(int)
-    
-    #converse categories into int
-    df['FamilyGroup'] = df['FamilyGroup'].astype(int)
-    df['AgeGroup'] = df['AgeGroup'].astype(int)
-    df['FareGroup'] = df['FareGroup'].astype(int)
-    
-    setTitle(df)    
-    
-  return dfs[0], dfs[1]
-
-
-train_df, test_df = getmanipulatedDF(train_df, test_df)
-
-X_learning = train_df.drop(['Name', 'Cabin', 'SibSp', 'Parch', 'Fare', 'Survived', 'Ticket', 'Fare_log', 'FamilySize', 'PassengerId'], axis=1)
-Y_learning = train_df['Survived']
-
-X_test = test_df.drop(['Name', 'Cabin', 'SibSp', 'Parch', 'Fare', 'Ticket', 'Fare_log', 'FamilySize', 'PassengerId'], axis=1)
-
+#Using XGBoost
 xgbc = xgb.XGBClassifier()
 xgbc.fit(X_learning,Y_learning)
 predictions = xgbc.predict(X_test)
 
-#0.76077 = xgb
-#0.74641 = gbc
-#0.76077 = ada
-
 output = pd.DataFrame({ 'PassengerId' : test_df['PassengerId'], 'Survived': predictions })
 
+#replace file path
 output.to_csv("Development/Playground/Titanic/out_xgb.csv", index = False)
 
-#New edit
-
-
-def setFamilyGroup(df): 
-    #set people into parentchild and spousesib groups
-    df['withP']=0
-    df['withS']=0
-    
-    df.loc[train_df['SibSp'] > 0, 'withS'] = 1
-    df.loc[train_df['Parch'] > 0, 'withP'] = 1
-    
-    #handle family group
-    df['FamilySize'] = df['SibSp'] + df['Parch'] + 1
-
-    bins = (-1, 1, 2, 3, 12)
-    group_names = [1,2,3,4]
-    categories = pd.cut(df['FamilySize'], bins, labels=group_names)
-    df['FamilyGroup'] = categories
-    
-def setAgeGroup(df): 
-    #fill up NaN age according class / sibsp / parch
-    index_NaN_age = list(df["Age"][df["Age"].isnull()].index)
-   
-    for i in index_NaN_age :
-      age_mean = df["Age"].mean()
-      age_std = df["Age"].std()
-      age_pred_w_spc = df["Age"][((df['SibSp'] == df.iloc[i]["SibSp"]) & (df['Parch'] == df.iloc[i]["Parch"]) & (df['Pclass'] == df.iloc[i]["Pclass"]))].mean()
-      age_pred_wo_spc = np.random.randint(age_mean - age_std, age_mean + age_std)
-    
-      if not np.isnan(age_pred_w_spc) :
-        df['Age'].iloc[i] = age_pred_w_spc
-      else :
-        df['Age'].iloc[i] = age_pred_wo_spc  
-        
-    #separate age into 6 groups 
-    bins = (-1, 15, 23, 33, 43, 53, 100)
-    group_names = [1,2,3,4,5,6]
-    categories = pd.cut(df['Age'], bins, labels=group_names)
-    df['AgeGroup'] = categories
-    
-facet = sns.FacetGrid(train_df, hue="Survived",aspect=4)
-facet.map(sns.kdeplot,'Fare_log',shade= True)
-facet.set(xlim=(0, train_df['Fare_log'].max()))
-facet.add_legend()
-
-plt.show()    
-
-def setFareGroup(df):
-  #fill the missing fare with median
-  df["Fare"] = df["Fare"].fillna(df["Fare"].median())
-
-  df['Fare_log'] = df["Fare"].map(lambda i: np.log(i) if i > 0 else 0)
-    
-  bins = (-1, 2, 2.68, 3.44, 10)
-  group_names = [1,2,3,4]
-  categories = pd.cut(df['Fare_log'], bins, labels=group_names)
-  df['FareGroup'] = categories
-
-X_learning = train_df.drop(['Name', 'Cabin', 'SibSp', 'Parch', 'Fare', 'Survived', 'Ticket', 'PassengerId'], axis=1)
-Y_learning = train_df['Survived']
- 
-X_test = test_df.drop(['Name', 'Cabin', 'SibSp', 'Parch', 'Fare', 'Ticket', 'PassengerId'], axis=1)    
-
-#0.78469 = XGB with new cal
-#0.75120 = ADA with new cal
+#0.78469 = XGB 
